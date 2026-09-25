@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Neural Relighting - Web Viewer</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111; font-family: sans-serif; color: #eee; }
+  #panel { position: absolute; top: 12px; left: 12px; z-index: 10; background: rgba(0,0,0,0.6);
+           padding: 10px 14px; border-radius: 8px; font-size: 13px; }
+  #panel label { display: block; margin: 6px 0 2px; }
+  #panel input[type=file] { font-size: 12px; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <strong>Neural Relighting Viewer</strong>
+  <label>Load extracted mesh (.glb/.obj exported from src/visualization/viewer.py or a demo run)</label>
+  <input type="file" id="meshInput" accept=".glb,.gltf,.obj" />
+  <label>Material channel overlay</label>
+  <select id="channelSelect">
+    <option value="albedo">Albedo</option>
+    <option value="roughness">Roughness</option>
+    <option value="metallic">Metallic</option>
+    <option value="shaded">Full shaded (BRDF + env light)</option>
+  </select>
+  <p style="opacity:0.7; max-width: 320px;">
+    This is a thin, self-contained viewer intended for quick inspection of the
+    editable 3D asset produced by the pipeline (Phase 5 deliverable). For batch
+    figure generation and ablation renders, use <code>src/visualization/viewer.py</code>
+    (Open3D) instead.
+  </p>
+</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+import { OBJLoader } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/OBJLoader.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100);
+camera.position.set(2, 1.5, 2);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+// Simple 3-point studio lighting so a loaded mesh is visible even before any
+// relit-render texture is applied (stands in for the "shaded" preview mode).
+const key = new THREE.DirectionalLight(0xffffff, 1.2); key.position.set(2, 3, 2); scene.add(key);
+const fill = new THREE.DirectionalLight(0xaaccff, 0.5); fill.position.set(-2, 1, -1); scene.add(fill);
+scene.add(new THREE.AmbientLight(0x404040, 0.6));
+scene.add(new THREE.GridHelper(2, 20, 0x333333, 0x222222));
+
+let currentObject = null;
+
+function frameObject(object) {
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3()).length();
+  const center = box.getCenter(new THREE.Vector3());
+  object.position.sub(center);
+  camera.position.set(size * 0.8, size * 0.6, size * 0.8);
+  controls.target.set(0, 0, 0);
+  controls.update();
+}
+
+function loadFile(file) {
+  const url = URL.createObjectURL(file);
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  const onLoaded = (object) => {
+    if (currentObject) scene.remove(currentObject);
+    currentObject = object;
+    scene.add(object);
+    frameObject(object);
+    URL.revokeObjectURL(url);
+  };
+
+  if (ext === 'glb' || ext === 'gltf') {
+    new GLTFLoader().load(url, (gltf) => onLoaded(gltf.scene));
+  } else if (ext === 'obj') {
+    new OBJLoader().load(url, onLoaded);
+  } else {
+    alert('Unsupported file type: ' + ext);
+  }
+}
+
+document.getElementById('meshInput').addEventListener('change', (e) => {
+  if (e.target.files.length) loadFile(e.target.files[0]);
+});
+
+document.getElementById('channelSelect').addEventListener('change', (e) => {
+  if (!currentObject) return;
+  // Placeholder hook: a real integration would swap in per-channel vertex-color
+  // buffers exported alongside the mesh (e.g. mesh_albedo.glb, mesh_roughness.glb)
+  // produced by src/visualization/viewer.py's colorize_by_material().
+  console.log('Channel switched to', e.target.value, '(load the matching exported mesh variant)');
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+</script>
+</body>
+</html>
