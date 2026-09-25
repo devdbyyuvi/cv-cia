@@ -1,0 +1,114 @@
+data:
+  loader:
+    batch_size: 4
+    num_workers: 8
+    shuffle: true
+  real:
+    require_colmap_poses: true
+    root: data/real_captures
+    views_per_object:
+    - 3
+    - 6
+  synthetic:
+    load_brdf: true
+    load_envmap: true
+    load_sdf: true
+    num_views_per_scene: 8
+    resolution: 256
+    root: data/synthetic
+diffusion_prior:
+  backend: materialfusion
+  ckpt_path: null
+  enabled: false
+  guidance_scale: 2.0
+  loss_weight: 0.2
+  num_inference_steps: 20
+evaluation:
+  benchmark:
+    target_device: consumer_gpu
+    timed_iters: 100
+    warmup_iters: 10
+  relighting:
+    metrics:
+    - psnr
+    - ssim
+    - lpips
+experiment:
+  device: cuda
+  name: hexaplane_inverse_rendering
+  out_dir: runs/
+  seed: 42
+losses:
+  ambiguity:
+    albedo_prior_consistency_weight: 0.5
+    energy_conservation_weight: 0.5
+    weight: 0.0
+  eikonal:
+    weight: 0.1
+  mask:
+    weight: 1.0
+  normal_smoothness:
+    weight: 0.05
+  photometric:
+    l1_weight: 0.8
+    l2_weight: 0.2
+    type: l1_l2_mix
+model:
+  feature_dim: 128
+  heads:
+    geometry:
+      hidden_dim: 128
+      num_layers: 2
+      predict_depth: true
+      predict_normals: true
+    illumination:
+      hidden_dim: 128
+      in_features: 128
+      num_sg_lobes: 24
+      out_features: 27
+      predict_ambient: true
+    material:
+      albedo_channels: 3
+      hidden_dim: 128
+      num_layers: 2
+      predict_metallic: true
+      predict_roughness: true
+  hexaplane:
+    feature_dim: 32
+    num_planes: 6
+    resolution:
+    - 128
+    - 128
+    - 128
+    - 32
+    - 32
+    - 32
+    scene_bound: 1.5
+  sdf_decoder:
+    geometric_init: true
+    hidden_dim: 128
+    num_layers: 3
+rendering:
+  background: white
+  brdf_model: cook_torrance_ggx
+  chunk_size: 1024
+  num_secondary_rays: 0
+  resolution: 128
+training:
+  finetune_real:
+    epochs: 60
+    lr: 5.0e-05
+    photometric_consistency_only: true
+  stage1:
+    epochs: 200
+    lr: 0.0005
+    lr_decay: cosine
+    warmup_steps: 500
+  stage2_diffusion:
+    epochs: 100
+    lr: 0.0001
+uncertainty:
+  dropout_p: 0.1
+  enabled: true
+  method: mc_dropout
+  num_forward_passes: 8

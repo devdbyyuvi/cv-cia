@@ -1,0 +1,112 @@
+# Default experiment configuration.
+# Override any field via CLI: --config configs/default.yaml --set training.lr=0.001
+
+experiment:
+  name: hexaplane_inverse_rendering
+  seed: 42
+  device: cuda   # falls back to cpu automatically if unavailable
+  out_dir: runs/
+
+data:
+  synthetic:
+    root: data/synthetic
+    resolution: 256
+    num_views_per_scene: 8      # views sampled per training scene per step
+    load_sdf: true
+    load_brdf: true
+    load_envmap: true
+  real:
+    root: data/real_captures
+    views_per_object: [3, 6]    # min/max orbital photos per object
+    require_colmap_poses: true
+  loader:
+    batch_size: 4
+    num_workers: 8
+    shuffle: true
+
+model:
+  feature_dim : 128
+  hexaplane:
+    resolution: [128, 128, 128, 32, 32, 32]  # xy, xz, yz, xt, yt, zt-style 6-plane grid (spatial triplanes here: xy,xz,yz + 3 aux planes)
+    num_planes: 6
+    feature_dim: 32
+    scene_bound: 1.5
+  sdf_decoder:
+    hidden_dim: 128
+    num_layers: 3
+    geometric_init: true
+  heads:
+    geometry:
+      hidden_dim: 128
+      num_layers: 2
+      predict_normals: true
+      predict_depth: true
+    material:
+      hidden_dim: 128
+      num_layers: 2
+      albedo_channels: 3
+      predict_roughness: true
+      predict_metallic: true
+    illumination:
+      hidden_dim: 128
+      num_sg_lobes: 24
+      predict_ambient: true
+      in_features: 128
+      out_features: 27
+
+rendering:
+  brdf_model: cook_torrance_ggx
+  num_secondary_rays: 0        # 0 = direct-only SG relighting (fast); >0 enables soft shadow sampling
+  background: white
+
+losses:
+  photometric:
+    type: l1_l2_mix
+    l1_weight: 0.8
+    l2_weight: 0.2
+  mask:
+    weight: 1.0
+  normal_smoothness:
+    weight: 0.05
+  eikonal:
+    weight: 0.1
+  ambiguity:
+    weight: 0.0          # activated in stage 2 (diffusion_prior.enabled)
+    energy_conservation_weight: 0.5
+    albedo_prior_consistency_weight: 0.5
+
+diffusion_prior:
+  enabled: false          # flip true for stage 2 / ablation "with prior"
+  backend: materialfusion  # one of: materialfusion, intrinsic_anything, none
+  ckpt_path: null          # path to locally downloaded pretrained weights
+  guidance_scale: 2.0
+  num_inference_steps: 20
+  loss_weight: 0.2
+
+uncertainty:
+  enabled: true
+  num_forward_passes: 8
+  method: mc_dropout        # mc_dropout | latent_sampling
+  dropout_p: 0.1
+
+training:
+  stage1:
+    epochs: 200
+    lr: 0.0005
+    lr_decay: cosine
+    warmup_steps: 500
+  stage2_diffusion:
+    epochs: 100
+    lr: 0.0001
+  finetune_real:
+    epochs: 60
+    lr: 0.00005
+    photometric_consistency_only: true   # no GT geometry/BRDF for real data
+
+evaluation:
+  relighting:
+    metrics: [psnr, ssim, lpips]
+  benchmark:
+    warmup_iters: 10
+    timed_iters: 100
+    target_device: consumer_gpu   # e.g. RTX 4070-class
