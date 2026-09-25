@@ -1,0 +1,14 @@
+{
+  "relighting": {
+    "psnr": 5.569459172992493,
+    "ssim": 0.00543597899377346,
+    "lpips": NaN
+  },
+  "benchmark": {
+    "device": "cpu",
+    "resolution": 256,
+    "num_views": 4,
+    "ms_per_reconstruction": 16447.613382339478,
+    "reconstructions_per_sec": 0.06079909447979509
+  }
+}
